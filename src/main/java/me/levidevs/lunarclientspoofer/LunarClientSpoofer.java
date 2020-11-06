@@ -4,6 +4,9 @@ import com.google.common.eventbus.EventBus;
 import cpw.mods.fml.common.DummyModContainer;
 import cpw.mods.fml.common.LoadController;
 import cpw.mods.fml.common.ModMetadata;
+import me.levidevs.lunarclientspoofer.mapper.Mapper;
+import me.levidevs.lunarclientspoofer.mapper.Mapper17;
+import me.levidevs.lunarclientspoofer.mapper.Mapper18;
 
 import java.util.Collections;
 import java.util.logging.Logger;
@@ -32,7 +35,7 @@ public class LunarClientSpoofer extends DummyModContainer {
 
         meta.modId = "LunarClientSpoofer";
         meta.name = "Lunar Client Spoofer";
-        meta.version = "1.0-PRODUCTION";
+        meta.version = "1.0.1-BETA";
         meta.authorList = Collections.singletonList("Levi Taylor");
         meta.url = "https://github.com/LeviDevs/LunarClientSpoofer";
         meta.updateUrl = meta.url;
@@ -41,6 +44,13 @@ public class LunarClientSpoofer extends DummyModContainer {
 
     public static LunarClientSpoofer getInstance() {
         return instance;
+    }
+
+    /* Mapper */
+    private Mapper mapper;
+
+    public Mapper getMapper() {
+        return this.mapper;
     }
 
     /* Logging */
@@ -56,6 +66,16 @@ public class LunarClientSpoofer extends DummyModContainer {
     @Override
     public boolean registerBus(EventBus bus, LoadController controller) {
         bus.register(this);
+
+        // Init mapper
+        // We do this by trying to find class "bjb" - if it can't be found, then we default to 1.8
+        try {
+            Class.forName("bjb");
+            this.mapper = new Mapper17();
+        } catch (ClassNotFoundException e) {
+            this.mapper = new Mapper18();
+        }
+
         return true;
     }
 

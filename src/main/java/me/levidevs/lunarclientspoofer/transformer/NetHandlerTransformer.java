@@ -1,5 +1,7 @@
 package me.levidevs.lunarclientspoofer.transformer;
 
+import me.levidevs.lunarclientspoofer.LunarClientSpoofer;
+import me.levidevs.lunarclientspoofer.mapper.Mapper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.launchwrapper.IClassTransformer;
 import org.objectweb.asm.ClassReader;
@@ -20,14 +22,22 @@ import java.util.UUID;
 public class NetHandlerTransformer implements IClassTransformer {
 
     @Override
-    public byte[] transform(String name, String transformedName, byte[] basicClass) {
+    public byte[] transform(String name, String transformedName, byte[] originalClass) {
         // Ignore if this isn't the class we want to transform
         if (!transformedName.equals("net.minecraft.client.network.NetHandlerPlayClient")) {
-            return basicClass;
+            return originalClass;
+        }
+
+        // The mapper to use to map class/field/method names
+        Mapper mapper = LunarClientSpoofer.getInstance().getMapper();
+
+        // Not initialized yet
+        if (mapper == null) {
+            return originalClass;
         }
 
         // Read the class
-        ClassReader reader = new ClassReader(basicClass);
+        ClassReader reader = new ClassReader(originalClass);
         ClassNode node = new ClassNode();
         reader.accept(node, 0);
 
@@ -38,7 +48,7 @@ public class NetHandlerTransformer implements IClassTransformer {
 
         for (MethodNode method : node.methods) {
             // Real values: handleJoinGame, S01PacketJoinGame
-            if (method.name.equals("a") && method.desc.equals("(Lhd;)V")) {
+            if (method.name.equals(mapper.map("handleJoinGame")) && method.desc.equals(String.format("(L%s;)V", mapper.map("S01PacketJoinGame")))) {
                 InsnList instructions = method.instructions;
                 Iterator<AbstractInsnNode> iterator = instructions.iterator();
 
@@ -104,7 +114,7 @@ public class NetHandlerTransformer implements IClassTransformer {
         }
 
         // Return original class in case we some how reach here
-        return basicClass;
+        return originalClass;
     }
 
     /**
@@ -116,14 +126,21 @@ public class NetHandlerTransformer implements IClassTransformer {
      *                              argument
      */
     private static void addInstructions(InsnList list, String type, InsnList byteArrayInstructions) {
+        Mapper mapper = LunarClientSpoofer.getInstance().getMapper();
+
         // Load `this` on to stack
         list.add(new VarInsnNode(Opcodes.ALOAD, 0));
 
         // Load `netManager` on to stack
-        list.add(new FieldInsnNode(Opcodes.GETFIELD, "bjb", "e", "Lej;"));
+        list.add(new FieldInsnNode(
+                Opcodes.GETFIELD,
+                mapper.map("NetHandlerPlayClient"),
+                mapper.map("netManager"),
+                String.format("L%s;", mapper.map("NetworkManager"))
+        ));
 
         // Create new C17PacketCustomPayload
-        list.add(new TypeInsnNode(Opcodes.NEW, "iz"));
+        list.add(new TypeInsnNode(Opcodes.NEW, mapper.map("C17PacketCustomPayload")));
         list.add(new InsnNode(Opcodes.DUP));
 
         // First constructor argument
@@ -133,14 +150,24 @@ public class NetHandlerTransformer implements IClassTransformer {
         list.add(byteArrayInstructions);
 
         // Call constructor
-        list.add(new MethodInsnNode(Opcodes.INVOKESPECIAL, "iz", "<init>", "(Ljava/lang/String;[B)V"));
+        list.add(new MethodInsnNode(
+                Opcodes.INVOKEVIRTUAL,
+                mapper.map("C17PacketCustomPayload"),
+                "<init>",
+                "(Ljava/lang/String;[B)V"
+        ));
 
         // Create second method parameter - empty array of GenericFutureListener
         list.add(new InsnNode(Opcodes.ICONST_0));
         list.add(new TypeInsnNode(Opcodes.ANEWARRAY, "io/netty/util/concurrent/GenericFutureListener"));
 
         // Send the packet
-        list.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "ej", "a", "(Lft;[Lio/netty/util/concurrent/GenericFutureListener;)V"));
+        list.add(new MethodInsnNode(
+                Opcodes.INVOKEVIRTUAL,
+                mapper.map("NetworkManager"),
+                mapper.map("scheduleOutboundPacket"),
+                String.format("(L%s;[Lio/netty/util/concurrent/GenericFutureListener;)V", mapper.map("Packet"))
+        ));
     }
 
     /**
